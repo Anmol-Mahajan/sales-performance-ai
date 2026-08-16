@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__
+*.py[cod]
+.DS_Store
+.pytest_cache
+.mypy_cache
+
+# Organisation data and trained artefacts must be mounted at runtime.
+data/*.xlsx
+models/*.joblib
+
+linkedin-post/screenshots
+

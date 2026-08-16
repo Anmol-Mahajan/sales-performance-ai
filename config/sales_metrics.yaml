@@ -1,0 +1,166 @@
+# Sales Performance AI metric semantics
+version: 1.0
+purpose: >
+  Canonical metric definitions for feature engineering, dashboard calculations,
+  model training and explanations. The model must use only metrics supported by
+  available source fields and must not invent unavailable values.
+
+principles:
+  - Keep raw event data separate from derived metrics.
+  - Recompute derived metrics from source fields whenever possible.
+  - Use time-based cutoffs so no future information leaks into training features.
+  - Do not rank salespeople solely on revenue; account for segment, territory,
+    seniority, opportunity mix and inherited customer base.
+  - Same-period outcome metrics such as Revenue, GrossProfit and OpportunitiesWon
+    must not be used as predictors when they are the target being predicted.
+  - Metrics marked requires_future_fields must remain unavailable until the stated
+    source fields exist.
+
+metric_groups:
+  activity:
+    - CustomerReachouts
+    - UniqueCustomersContacted
+    - MeetingsBooked
+    - Meetings
+    - MeetingShowRate
+  pipeline:
+    - OpportunitiesCreated
+    - PipelineValue
+    - QualifiedOpportunities
+    - AverageDealSize
+    - PipelineCoverage
+  conversion:
+    - ReachoutToMeetingRate
+    - MeetingToOpportunityRate
+    - WinRate
+    - QuoteToWinRate
+    - SalesCycleDays
+  commercial:
+    - Revenue
+    - GrossProfit
+    - GrossMarginPct
+    - RecurringRevenueWon
+    - OneTimeRevenueWon
+    - TargetAttainment
+  growth:
+    - NewCustomers
+    - CrossSellOpportunities
+    - CrossSellRevenue
+    - CrossSellRevenuePct
+    - ProductsPerCustomer
+    - WhitespaceClosed
+  retention:
+    - RetentionRate
+    - RenewalRate
+    - ChurnRate
+    - RenewalOpportunitiesContacted
+    - PctContractsContacted90DBeforeRenewal
+  efficiency_and_behaviour:
+    - ReachoutsPerMeeting
+    - MeetingsPerOpportunity
+    - ReachoutsPerOpportunity
+    - MeetingsPerWin
+    - RevenuePerMeeting
+    - GrossProfitPerMeeting
+    - RevenuePerOpportunity
+    - GrossProfitPerOpportunity
+    - WinsPer100Reachouts
+    - GrossProfitPerReachout
+    - DaysBetweenCustomerInteractions
+    - DaysFirstContactToMeeting
+    - DaysMeetingToOpportunity
+    - DaysOpportunityToClose
+    - PctCustomersContacted30D
+  synergy:
+    - SynergyReferralsSent
+    - SynergyReferralsReceived
+    - SynergyReferralConversionRate
+
+available_derived_metrics:
+  GrossMarginPct:
+    formula: GrossProfit / Revenue
+    zero_denominator: 0
+  ReachoutsPerMeeting:
+    formula: CustomerReachouts / Meetings
+    zero_denominator: 0
+  MeetingsPerOpportunity:
+    formula: Meetings / OpportunitiesCreated
+    zero_denominator: 0
+  ReachoutsPerOpportunity:
+    formula: CustomerReachouts / OpportunitiesCreated
+    zero_denominator: 0
+  MeetingsPerWin:
+    formula: Meetings / OpportunitiesWon
+    zero_denominator: 0
+  RevenuePerMeeting:
+    formula: Revenue / Meetings
+    zero_denominator: 0
+  GrossProfitPerMeeting:
+    formula: GrossProfit / Meetings
+    zero_denominator: 0
+  RevenuePerOpportunity:
+    formula: Revenue / OpportunitiesCreated
+    zero_denominator: 0
+  GrossProfitPerOpportunity:
+    formula: GrossProfit / OpportunitiesCreated
+    zero_denominator: 0
+  WinsPer100Reachouts:
+    formula: OpportunitiesWon / CustomerReachouts * 100
+    zero_denominator: 0
+  CrossSellRevenuePct:
+    formula: CrossSellRevenue / Revenue
+    zero_denominator: 0
+  CrossSellOpportunityRate:
+    formula: CrossSellOpportunities / OpportunitiesCreated
+    zero_denominator: 0
+  NewCustomersPerWin:
+    formula: NewCustomers / OpportunitiesWon
+    zero_denominator: 0
+  GrossProfitPerReachout:
+    formula: GrossProfit / CustomerReachouts
+    zero_denominator: 0
+
+requires_future_fields:
+  UniqueCustomersContacted:
+    required_fields: [Activities.CustomerID]
+  MeetingsBooked:
+    required_fields: [MeetingID, BookedDate, Status]
+  MeetingShowRate:
+    required_fields: [MeetingID, Status]
+  QuoteToWinRate:
+    required_fields: [QuoteID, QuoteDate, QuoteStatus, OpportunityID]
+  RecurringRevenueWon:
+    required_fields: [RecurringRevenue]
+  OneTimeRevenueWon:
+    required_fields: [OneTimeRevenue]
+  DaysBetweenCustomerInteractions:
+    required_fields: [Activities.CustomerID, Activities.ActivityDate]
+  DaysFirstContactToMeeting:
+    required_fields: [Activities.CustomerID, MeetingDate]
+  DaysMeetingToOpportunity:
+    required_fields: [Activities.CustomerID, Opportunities.CustomerID]
+  PctCustomersContacted30D:
+    required_fields: [Activities.CustomerID, customer ownership]
+  PctContractsContacted90DBeforeRenewal:
+    required_fields: [Activities.CustomerID, Contracts.CurrentEndDate]
+
+recommended_composite_score:
+  note: >
+    Use for dashboard benchmarking only, not as an employment decision score.
+    Standardise component metrics within comparable peer cohorts before weighting.
+  components:
+    commercial_outcome: 0.30
+    conversion: 0.20
+    new_business: 0.15
+    existing_customer_growth: 0.15
+    retention: 0.10
+    sales_efficiency: 0.10
+
+peer_controls:
+  - Segment
+  - Region
+  - Seniority
+  - PrimarySpecialism
+  - New_vs_existing_business_mix
+  - Customer_portfolio_value
+  - Opportunity_type_mix

@@ -1,0 +1,46 @@
+# Local query-planning vocabulary. Add synonyms here without changing Python.
+version: 1
+
+domains:
+  opportunities:
+    aliases: [opportunity, opportunities, pipeline, deal, deals]
+  meetings:
+    aliases: [meeting, meetings, appointment, appointments]
+  projects:
+    aliases: [project, projects, ticket, tickets, task, tasks, delivery, implementation]
+  contracts:
+    aliases: [contract, contracts, renewal, renewals, health check]
+  customers:
+    aliases: [customer, customers, account, accounts, client, clients, whitespace]
+  performance:
+    aliases: [performance, performer, performers, revenue, win rate, score, coaching]
+  data_quality:
+    aliases: [data quality, missing values, duplicate, duplicates, invalid data]
+
+operations:
+  forecast: [forecast, achievable, achievability, probability, cover target]
+  rank: [top, bottom, best, worst, highest, lowest, most, rank, ranking]
+  status: [status, stage, progress, blocked, overdue]
+  explain: [why, explain, reason, cause]
+  list: [show, list, which, what, who, upcoming, open, current]
+
+opportunity_types:
+  Cross-sell: [cross-sell, cross sell, cross selling, expansion sale]
+  Upsell: [upsell, up-sell, up sell]
+  Renewal: [renewal, renew]
+  New Customer: [new customer, new business, new logo]
+
+opportunity_stages:
+  Open: [open, active, current, upcoming]
+  Won: [won, closed won]
+  Lost: [lost, closed lost]
+
+time_scopes:
+  upcoming: [upcoming, future, due to close, expected to close]
+  last_complete_week: [last week, previous week, prior week]
+  last_complete_month: [last month, previous month, prior month]
+  current_year: [this year, current year, year to date, ytd]
+
+sort_terms:
+  ascending: [earliest, soonest, lowest, bottom]
+  descending: [latest, highest, top, largest, biggest]

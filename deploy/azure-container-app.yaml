@@ -1,0 +1,83 @@
+# Template only. Replace bracketed values and configure the named Azure Files
+# storage entries on the Container Apps environment before deployment.
+apiVersion: 2024-03-01
+location: <azure-region>
+name: sales-performance-ai
+type: Microsoft.App/containerApps
+identity:
+  type: SystemAssigned
+properties:
+  managedEnvironmentId: <managed-environment-resource-id>
+  configuration:
+    activeRevisionsMode: Single
+    registries:
+      - server: <registry-name>.azurecr.io
+        identity: system
+    ingress:
+      external: false
+      targetPort: 8050
+      transport: auto
+      allowInsecure: false
+  template:
+    containers:
+      - name: sales-performance-ai
+        image: <registry-name>.azurecr.io/sales-performance-ai:<image-tag>
+        env:
+          - name: SALES_AI_RUNTIME_MODE
+            value: azure-container-apps
+          - name: SALES_AI_WORKBOOK_PATH
+            value: /mnt/sales-data/MSP_Sales_Performance_Raw_Data_With_Common_Metrics.xlsx
+          - name: SALES_AI_METRICS_PATH
+            value: /app/config/sales_metrics.yaml
+          - name: SALES_AI_QUERY_INTENTS_PATH
+            value: /app/config/query_intents.yaml
+          - name: SALES_AI_MODEL_DIR
+            value: /mnt/models
+          - name: PORT
+            value: "8050"
+          - name: WEB_CONCURRENCY
+            value: "1"
+          - name: GUNICORN_THREADS
+            value: "4"
+        resources:
+          cpu: 2.0
+          memory: 4Gi
+        volumeMounts:
+          - volumeName: sales-data
+            mountPath: /mnt/sales-data
+          - volumeName: model-storage
+            mountPath: /mnt/models
+        probes:
+          - type: Startup
+            httpGet:
+              path: /readyz
+              port: 8050
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 18
+          - type: Liveness
+            httpGet:
+              path: /healthz
+              port: 8050
+            periodSeconds: 30
+          - type: Readiness
+            httpGet:
+              path: /readyz
+              port: 8050
+            periodSeconds: 15
+        
+    scale:
+      minReplicas: 1
+      maxReplicas: 1
+      rules:
+        - name: http-concurrency
+          http:
+            metadata:
+              concurrentRequests: "25"
+    volumes:
+      - name: sales-data
+        storageType: AzureFile
+        storageName: <environment-sales-data-storage-name>
+      - name: model-storage
+        storageType: AzureFile
+        storageName: <environment-model-storage-name>

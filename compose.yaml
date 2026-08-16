@@ -1,0 +1,22 @@
+services:
+  sales-performance-ai:
+    build: .
+    ports:
+      - "8050:8050"
+    environment:
+      SALES_AI_RUNTIME_MODE: local-container
+      SALES_AI_WORKBOOK_PATH: /mnt/sales-data/MSP_Sales_Performance_Raw_Data_With_Common_Metrics.xlsx
+      SALES_AI_METRICS_PATH: /app/config/sales_metrics.yaml
+      SALES_AI_QUERY_INTENTS_PATH: /app/config/query_intents.yaml
+      SALES_AI_MODEL_DIR: /mnt/models
+      PORT: "8050"
+      WEB_CONCURRENCY: "1"
+      GUNICORN_THREADS: "4"
+    volumes:
+      - ./data:/mnt/sales-data:ro
+      - ./models:/mnt/models
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+

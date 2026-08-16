@@ -438,6 +438,7 @@ def answer_with_local_llm(
             base_answer.table,
             f"{base_answer.source}; deterministic result retained in Local LLM mode",
             base_answer.interpretation,
+            base_answer.visual,
         )
 
     last_week_meeting_question = (
@@ -451,6 +452,7 @@ def answer_with_local_llm(
             base_answer.table,
             f"{base_answer.source}; deterministic result retained in Local LLM mode",
             base_answer.interpretation,
+            base_answer.visual,
         )
 
     if base_answer.source.startswith("Validated query plan over Meetings"):
@@ -460,6 +462,7 @@ def answer_with_local_llm(
             base_answer.table,
             f"{base_answer.source}; deterministic result retained in Local LLM mode",
             base_answer.interpretation,
+            base_answer.visual,
         )
 
     if base_answer.title in {
@@ -473,6 +476,7 @@ def answer_with_local_llm(
             base_answer.table,
             f"{base_answer.source}; deterministic result retained in Local LLM mode",
             base_answer.interpretation,
+            base_answer.visual,
         )
 
     pipeline_question = any(
@@ -496,6 +500,7 @@ def answer_with_local_llm(
             base_answer.table,
             f"{base_answer.source}; deterministic forecast retained in Local LLM mode",
             base_answer.interpretation,
+            base_answer.visual,
         )
     status = local_llm_status(model)
     if not status.available or not status.model_installed:
@@ -505,6 +510,7 @@ def answer_with_local_llm(
             base_answer.table,
             f"{base_answer.source}; local workbook fallback",
             base_answer.interpretation,
+            base_answer.visual,
         )
 
     context = build_question_context(question, data, base_answer)
@@ -566,6 +572,7 @@ LOCAL DATA CONTEXT:
             base_answer.table,
             f"{base_answer.source}; local workbook fallback",
             base_answer.interpretation,
+            base_answer.visual,
         )
 
     response = result.stdout.strip()
@@ -576,6 +583,7 @@ LOCAL DATA CONTEXT:
             base_answer.table,
             f"{base_answer.source}; local LLM returned no usable response",
             base_answer.interpretation,
+            base_answer.visual,
         )
     response = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL)
     response = re.sub(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])", "", response)
@@ -596,6 +604,7 @@ LOCAL DATA CONTEXT:
             base_answer.table,
             f"{base_answer.source}; local LLM response was empty after cleanup",
             base_answer.interpretation,
+            base_answer.visual,
         )
     return DataAnswer(
         f"Local LLM: {base_answer.title}",
@@ -603,4 +612,5 @@ LOCAL DATA CONTEXT:
         base_answer.table,
         f"Local workbook plus {model} running in this private runtime",
         base_answer.interpretation,
+        base_answer.visual,
     )

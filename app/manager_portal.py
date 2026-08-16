@@ -218,6 +218,57 @@ def _chart_style(fig: go.Figure, height: int = 350, legend: bool = True) -> go.F
     return fig
 
 
+def _answer_visual_panel(visual) -> html.Div:
+    """Render an answer-level visual recommendation as a read-only chart."""
+
+    if visual is None or visual.data.empty:
+        return html.Div()
+    frame = visual.data.copy()
+    if visual.x in frame and _is_date_field(visual.x):
+        frame[visual.x] = pd.to_datetime(frame[visual.x], errors="coerce")
+    if visual.chart_type == "bar":
+        fig = px.bar(
+            frame,
+            x=visual.x,
+            y=visual.y,
+            color=visual.color if visual.color in frame else None,
+            orientation=visual.orientation,
+            barmode=visual.barmode,
+            title=visual.title,
+            color_discrete_sequence=COLORS,
+        )
+    else:
+        fig = px.line(
+            frame,
+            x=visual.x,
+            y=visual.y,
+            color=visual.color if visual.color in frame else None,
+            markers=True,
+            title=visual.title,
+            color_discrete_sequence=COLORS,
+        )
+    value_axis = "x" if visual.orientation == "h" else "y"
+    axis_update = {}
+    if visual.value_prefix:
+        axis_update["tickprefix"] = visual.value_prefix
+        axis_update["tickformat"] = "~s"
+    if visual.value_suffix == "%":
+        axis_update["tickformat"] = ".0%"
+    elif visual.value_suffix:
+        axis_update["ticksuffix"] = visual.value_suffix
+    if axis_update:
+        if value_axis == "x":
+            fig.update_xaxes(**axis_update)
+        else:
+            fig.update_yaxes(**axis_update)
+    _chart_style(fig, 340, legend=bool(visual.color))
+    return _chart_panel(
+        fig,
+        visual.explanation or "This chart was selected from the verified local answer table.",
+        "answer-visual",
+    )
+
+
 def _renewal_view(data: dict[str, pd.DataFrame]) -> pd.DataFrame:
     renewals = data["UpcomingRenewals"].copy()
     renewals = renewals.merge(
@@ -921,6 +972,7 @@ def register_manager_callbacks(
             ]
             columns = [column for column in preferred if column in table.columns] or list(table.columns[:10])
             result = _data_table(table, columns, 7)
+        visual = _answer_visual_panel(answer.visual)
         meeting_detail = html.Div()
         if "Meetings last week" in answer.title and not table.empty and {"Period Start", "Period End"}.issubset(table.columns):
             period_start = pd.to_datetime(table["Period Start"], errors="coerce").min()
@@ -973,6 +1025,7 @@ def register_manager_callbacks(
             html.Div(answer.title, className="answer-title"),
             interpretation,
             html.Div(answer.summary, className="answer-summary"),
+            visual,
             result,
             meeting_detail,
             html.Div(

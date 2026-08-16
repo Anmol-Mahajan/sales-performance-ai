@@ -21,6 +21,7 @@ from .metric_config import load_metric_config
 from .pipeline_forecasting import build_pipeline_forecast
 from .query_execution import execute_query_plan
 from .query_planning import build_query_plan
+from .visuals import AnswerVisual, recommend_answer_visual
 
 
 DRIVER_COLUMNS = {
@@ -40,6 +41,7 @@ class DataAnswer:
     table: pd.DataFrame
     source: str
     interpretation: dict[str, str] | None = None
+    visual: AnswerVisual | None = None
 
 
 def _numeric(series: pd.Series) -> pd.Series:
@@ -952,13 +954,20 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
         "cross_sell_opportunities", "support_status",
     ]
 
+    def with_visual(answer: DataAnswer) -> DataAnswer:
+        if answer.visual is None:
+            answer.visual = recommend_answer_visual(
+                answer.title, answer.table, question, answer.interpretation
+            )
+        return answer
+
     if not question:
-        return DataAnswer(
+        return with_visual(DataAnswer(
             "Ask a question",
             "Enter a question about performance, renewals, customers, services, whitespace, or collaboration.",
             pd.DataFrame(),
             "Local workbook only",
-        )
+        ))
 
     query_plan = build_query_plan(question, data)
     if query_plan.needs_clarification:
@@ -972,22 +981,22 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
                 for message in query_plan.ambiguities
             ]
         )
-        return DataAnswer(
+        return with_visual(DataAnswer(
             "Please clarify the request",
             "The query planner found more than one valid interpretation. Choose the intended workbook view so I do not mix different records.",
             clarification_rows,
             "Manager clarification required; local structured query plan",
             query_plan.interpretation(),
-        )
+        ))
     planned_result = execute_query_plan(query_plan, data)
     if planned_result is not None:
-        return DataAnswer(
+        return with_visual(DataAnswer(
             planned_result.title,
             planned_result.summary,
             planned_result.table,
             planned_result.source,
             planned_result.interpretation,
-        )
+        ))
 
     metric_definitions = data.get("MetricDefinitions", pd.DataFrame())
     metric_language = any(term in lowered for term in ["metric", "define", "definition", "formula", "calculate", "what is"])
@@ -1001,12 +1010,12 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
         weight_text = ", ".join(
             f"{row.Component} {row.Weight}" for row in weights.itertuples(index=False)
         )
-        return DataAnswer(
+        return with_visual(DataAnswer(
             "Performance comparison metrics",
             f"The composite performance score uses six peer-adjusted components: {weight_text}. Diagnostic drivers and displayed outcomes are shown separately and are not additional score weights. The score supports coaching and benchmarking; it should not be used alone for employment decisions.",
             comparison,
             "Local sales_metrics.yaml and implemented performance profile logic",
-        )
+        ))
     if metric_language and not metric_definitions.empty:
         normalized_question = re.sub(r"[^a-z0-9]", "", lowered)
         matches = metric_definitions[
@@ -1022,12 +1031,12 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
                 f"{first['MetricName']}: {first['Definition']} "
                 f"Formula or logic: {first['FormulaOrLogic']}. Availability: {first['Availability']}."
             )
-            return DataAnswer(
+            return with_visual(DataAnswer(
                 "Canonical metric definition",
                 summary,
                 matches.head(25),
                 "Metric Definitions sheet and local sales_metrics.yaml",
-            )
+            ))
 
     has_explicit_record = any(
         [
@@ -1092,12 +1101,12 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
         else:
             result_table = summary.head(15)
             title = "Pipeline revenue forecast"
-        return DataAnswer(
+        return with_visual(DataAnswer(
             title,
             summary_text,
             result_table,
             "Current-year Monthly Performance, Opportunities, local win classifier, meetings, and opportunity notes",
-        )
+        ))
 
     last_week_meeting_question = (
         "meeting" in lowered
@@ -1106,30 +1115,30 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
     if last_week_meeting_question:
         ranked, period_start, period_end, latest_date = _last_complete_week_meeting_leaderboard(data)
         if period_start is None:
-            return DataAnswer(
+            return with_visual(DataAnswer(
                 "Meetings last week",
                 "A weekly meeting answer needs SalespersonID, ActivityDate, and ActivityType in the local Activities sheet.",
                 pd.DataFrame(),
                 "Local workbook availability check",
-            )
+            ))
         period = f"{period_start:%d %b %Y} to {period_end:%d %b %Y}"
         if ranked.empty:
-            return DataAnswer(
+            return with_visual(DataAnswer(
                 "Meetings last week",
                 f"No meeting activities were recorded during {period}. The latest activity in the workbook is {latest_date:%d %b %Y}.",
                 ranked,
                 "Activities sheet in the local workbook",
-            )
+            ))
         highest = int(ranked["Meetings"].max())
         leaders = ranked.loc[ranked["Meetings"] == highest, "Salesperson"].tolist()
         leader_text = leaders[0] if len(leaders) == 1 else f"{', '.join(leaders[:-1])} and {leaders[-1]}"
         meeting_text = f"{highest} meetings" if len(leaders) == 1 else f"{highest} meetings each"
-        return DataAnswer(
+        return with_visual(DataAnswer(
             "Meetings last week",
             f"{leader_text} held the most meetings in the latest complete week available: {meeting_text} during {period}. The workbook's latest activity date is {latest_date:%d %b %Y}.",
             ranked,
             "Meetings and Salespeople sheets in the local workbook",
-        )
+        ))
 
     opportunity_id = _find_opportunity_id(question, data)
     response_queue_question = any(
@@ -1142,12 +1151,12 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
     if response_queue_question:
         notes = data.get("OpportunityNotes", pd.DataFrame()).copy()
         if notes.empty:
-            return DataAnswer(
+            return with_visual(DataAnswer(
                 "Opportunity response queue",
                 "The local workbook does not contain opportunity notes yet.",
                 notes,
                 "Local workbook availability check",
-            )
+            ))
         notes = notes[notes["ResponseStatus"].astype(str).str.lower().eq("waiting response")]
         if person is not None:
             notes = notes[notes["SalespersonID"] == person["SalespersonID"]]
@@ -1167,22 +1176,22 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
         )
         oldest = int(pd.to_numeric(notes.get("ResponseAgeDays"), errors="coerce").max()) if not notes.empty else 0
         critical = int(notes.get("CriticalFindingFlag", pd.Series(dtype=bool)).fillna(False).astype(bool).sum())
-        return DataAnswer(
+        return with_visual(DataAnswer(
             "Opportunity responses waiting",
             f"{len(notes):,} opportunity notes are waiting for a response; {critical:,} are marked critical and the oldest has waited {oldest:,} days.",
             notes,
             "Opportunity Notes, Customers, and Salespeople sheets",
-        )
+        ))
 
     if "meeting" in lowered:
         meetings = data.get("Meetings", pd.DataFrame()).copy()
         if meetings.empty:
-            return DataAnswer(
+            return with_visual(DataAnswer(
                 "Customer meetings",
                 "Detailed meeting records are not available in the local workbook.",
                 meetings,
                 "Local workbook availability check",
-            )
+            ))
         if person is not None:
             meetings = meetings[meetings["SalespersonID"] == person["SalespersonID"]]
         if customer is not None:
@@ -1205,16 +1214,16 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
             on="SalespersonID", how="left",
         ).sort_values("MeetingDate", ascending=False)
         critical = int(meetings["CriticalFindingFlag"].fillna(False).astype(bool).sum()) if not meetings.empty else 0
-        return DataAnswer(
+        return with_visual(DataAnswer(
             "Customer meeting intelligence",
             f"Found {len(meetings):,} matching meetings, including {critical:,} with critical findings.",
             meetings,
             "Meetings, Customers, Salespeople, and Opportunities sheets",
-        )
+        ))
 
     delivery_question = is_delivery_question(question, data)
     if delivery_question:
-        return _answer_delivery_question(question, data, person, customer, opportunity_id)
+        return with_visual(_answer_delivery_question(question, data, person, customer, opportunity_id))
 
     if any(term in lowered for term in ["why", "cause", "reason", "understand", "explain"]):
         if any(term in lowered for term in ["performance", "perform", "revenue", "win", "meeting", "score", "gap"]):
@@ -1252,7 +1261,7 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
         elif "bill" in lowered or "mrr" in lowered:
             rows = billing[billing["CustomerID"] == customer_id].copy()
         summary = f"Found {len(rows):,} matching local records for {customer['CustomerName']}."
-        return DataAnswer(f"{customer['CustomerName']} account view", summary, rows.head(25), "Customers, Contracts, Contract Services, and Billing")
+        return with_visual(DataAnswer(f"{customer['CustomerName']} account view", summary, rows.head(25), "Customers, Contracts, Contract Services, and Billing"))
 
     if person is not None and any(word in lowered for word in ["perform", "revenue", "score", "gap", "how is", "win rate"]):
         selected = profiles[profiles["SalespersonID"] == person["SalespersonID"]][profile_columns]
@@ -1261,7 +1270,7 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
             f"actual revenue of {_money(person['total_revenue'])}, and a gap of {_money(person['performance_gap'])} "
             "against the local annual target."
         )
-        return DataAnswer(f"{person['Salesperson']} performance", summary, selected, "Monthly Performance, Targets, and local engineered features")
+        return with_visual(DataAnswer(f"{person['Salesperson']} performance", summary, selected, "Monthly Performance, Targets, and local engineered features"))
 
     if "renew" in lowered or "health check" in lowered or "rolling contract" in lowered:
         renewals = data.get("UpcomingRenewals", pd.DataFrame()).copy()
@@ -1277,12 +1286,12 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
             if person is not None:
                 renewals = renewals[renewals["AccountOwnerID"] == person["SalespersonID"]]
         renewals = renewals.sort_values("DaysToRenewal") if "DaysToRenewal" in renewals else renewals
-        return DataAnswer(
+        return with_visual(DataAnswer(
             "Renewal and health-check priorities",
             f"Found {len(renewals):,} contracts matching the question. Negative renewal days indicate overdue or rolling contracts.",
             renewals.head(25),
             "Contracts and Upcoming Renewals",
-        )
+        ))
 
     if "whitespace" in lowered or "cross-sell" in lowered or "cross sell" in lowered:
         whitespace = create_customer_whitespace(data)
@@ -1301,23 +1310,23 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
             )
         result = whitespace.head(result_limit)
         potential = result["Estimated Annual Potential"].sum() if not result.empty else 0
-        return DataAnswer(
+        return with_visual(DataAnswer(
             "Customer whitespace opportunities",
             f"The local product history identifies {len(result):,} matching customer opportunities with combined estimated annual potential of {_money(potential)}. Estimates are directional, not guarantees.",
             result,
             "Customer Products, Customers, Contracts, and Salespeople",
-        )
+        ))
 
     if any(word in lowered for word in ["synergy", "collaborat", "partner", "referral"]):
         synergy = create_synergy_summary(data)
         if person is not None and not synergy.empty:
             synergy = synergy[(synergy["FromSalespersonID"] == person["SalespersonID"]) | (synergy["ToSalespersonID"] == person["SalespersonID"])]
-        return DataAnswer(
+        return with_visual(DataAnswer(
             "Sales collaboration",
             f"Found {len(synergy):,} salesperson referral relationships in the local workbook.",
             synergy.head(20),
             "Synergy Referrals and Synergy Map",
-        )
+        ))
 
     high_ranking = any(term in lowered for term in ["top", "best", "highest"])
     low_ranking = any(
@@ -1355,13 +1364,13 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
         )
         direction = "lowest" if low_ranking else "highest"
         title = "Bottom performers" if low_ranking else "Top performers"
-        return DataAnswer(
+        return with_visual(DataAnswer(
             title,
             f"The {count} {direction} results by {label} are {result_text}. "
             "Use the underlying measures and context alongside the composite score.",
             ranked,
             "Monthly Performance, Targets, and local engineered features",
-        )
+        ))
 
     if "missing" in lowered or "data quality" in lowered:
         rows = []
@@ -1370,12 +1379,12 @@ def answer_data_question(question: str, data: dict[str, pd.DataFrame]) -> DataAn
             if count:
                 rows.append({"Sheet": sheet, "Rows": len(frame), "Missing Values": count})
         table = pd.DataFrame(rows).sort_values("Missing Values", ascending=False) if rows else pd.DataFrame()
-        return DataAnswer("Local data quality", f"{len(table):,} sheets contain one or more missing values.", table, "All loaded workbook sheets")
+        return with_visual(DataAnswer("Local data quality", f"{len(table):,} sheets contain one or more missing values.", table, "All loaded workbook sheets"))
 
     if any(word in lowered for word in ["revenue", "meeting", "opportunit", "win rate", "score"]):
         metric = "total_meetings" if "meeting" in lowered else "opportunities_created" if "opportunit" in lowered else "win_rate" if "win" in lowered else "total_revenue"
         ranked = profiles.sort_values(metric, ascending=False)[profile_columns]
-        return DataAnswer("Team performance", "Team results ranked from the local workbook.", ranked, "Monthly Performance and local performance profiles")
+        return with_visual(DataAnswer("Team performance", "Team results ranked from the local workbook.", ranked, "Monthly Performance and local performance profiles"))
 
     if any(term in lowered for term in ["why", "cause", "reason", "understand", "explain"]):
         topic = "performance" if any(term in lowered for term in ["performance", "revenue", "win", "meeting"]) else "general"

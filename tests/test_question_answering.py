@@ -135,6 +135,14 @@ class QuestionAnsweringTests(unittest.TestCase):
         self.assertEqual(int(answer.table["Meetings"].sum()), len(detail))
         self.assertTrue(detail["MeetingDate"].between(period_start, period_end).all())
 
+    def test_last_week_leaderboard_recommends_meeting_bar_chart(self) -> None:
+        answer = answer_data_question("Who held the most meetings last week?", self.data)
+        self.assertIsNotNone(answer.visual)
+        self.assertEqual(answer.visual.chart_type, "bar")
+        self.assertEqual(answer.visual.x, "Salesperson")
+        self.assertEqual(answer.visual.y, "Meetings")
+        self.assertIn("Meetings by salesperson", answer.visual.title)
+
     def test_last_week_meetings_for_salesperson_return_records(self) -> None:
         answer = answer_data_question(
             "What are the last week meetings by Alice?", self.data
@@ -145,6 +153,15 @@ class QuestionAnsweringTests(unittest.TestCase):
         self.assertTrue(answer.table["MeetingStatus"].str.casefold().eq("held").all())
         self.assertIn("03 Aug 2026 to 09 Aug 2026", answer.summary)
         self.assertEqual(answer.interpretation["Salesperson"], "Alice Brown")
+
+    def test_meeting_record_answer_recommends_date_activity_chart(self) -> None:
+        answer = answer_data_question(
+            "What are the last week meetings by Alice?", self.data
+        )
+        self.assertIsNotNone(answer.visual)
+        self.assertEqual(answer.visual.x, "MeetingDate")
+        self.assertEqual(answer.visual.y, "Meetings")
+        self.assertEqual(answer.visual.color, "Salesperson")
 
     def test_last_week_salesperson_meetings_are_retained_in_llm_mode(self) -> None:
         with patch("src.local_llm.subprocess.run") as run:
@@ -157,6 +174,8 @@ class QuestionAnsweringTests(unittest.TestCase):
             "Verified local result: Meetings last week for Alice Brown",
         )
         self.assertEqual(len(answer.table), 3)
+        self.assertIsNotNone(answer.visual)
+        self.assertEqual(answer.visual.x, "MeetingDate")
 
     def test_monthly_meeting_ranking_uses_the_requested_calendar_month(self) -> None:
         answer = answer_data_question(

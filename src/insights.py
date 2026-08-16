@@ -746,6 +746,19 @@ def _answer_delivery_question(
 
     if (asks_ticket and "projects" not in lowered) or ticket_id:
         rows = data.get("OpportunityTickets", pd.DataFrame()).copy()
+        project_context = data.get("Projects", pd.DataFrame())
+        if not project_context.empty and "ProjectID" in rows:
+            context_columns = [
+                column for column in [
+                    "ProjectID", "ProjectStatus", "DeliveryHealth", "ProjectStage",
+                    "TargetCompletionDate", "Blocker",
+                ] if column in project_context
+            ]
+            rows = rows.merge(
+                project_context[context_columns].drop_duplicates("ProjectID"),
+                on="ProjectID",
+                how="left",
+            )
         if ticket_id:
             rows = rows[rows["TicketID"].astype(str).eq(ticket_id)]
         if project_id and "ProjectID" in rows:
@@ -757,7 +770,24 @@ def _answer_delivery_question(
         if customer is not None and "CustomerID" in rows:
             rows = rows[rows["CustomerID"].astype(str).eq(str(customer["CustomerID"]))]
         status = rows.get("TicketStatus", pd.Series("", index=rows.index)).astype(str).str.casefold()
-        if "blocked" in lowered:
+        priority = rows.get("Priority", pd.Series("", index=rows.index)).astype(str).str.casefold()
+        escalation = rows.get("EscalationFlag", pd.Series(False, index=rows.index)).fillna(False).astype(bool)
+        project_status = rows.get("ProjectStatus", pd.Series("", index=rows.index)).astype(str).str.casefold()
+        project_health = rows.get("DeliveryHealth", pd.Series("", index=rows.index)).astype(str).str.casefold()
+        critical_ticket_query = "critical" in lowered or re.search(r"\bred\b", lowered)
+        explicit_resolved = bool(re.search(r"\b(?:resolved|closed)\b", lowered))
+        if critical_ticket_query:
+            critical = (
+                priority.eq("critical")
+                | status.eq("blocked")
+                | escalation
+                | project_health.eq("red")
+                | project_status.eq("on hold")
+            )
+            if not explicit_resolved:
+                critical = critical & ~status.eq("resolved")
+            rows = rows[critical]
+        elif "blocked" in lowered:
             rows = rows[status.eq("blocked")]
         elif "in progress" in lowered:
             rows = rows[status.eq("in progress")]
@@ -769,10 +799,27 @@ def _answer_delivery_question(
             current_status = rows["TicketStatus"].astype(str).str.casefold()
             rows = rows[pd.to_datetime(rows["DueDate"], errors="coerce").lt(_latest_data_date(data)) & ~current_status.eq("resolved")]
         blocked_count = int(rows.get("TicketStatus", pd.Series(dtype=str)).astype(str).str.casefold().eq("blocked").sum())
+        critical_priority = int(rows.get("Priority", pd.Series(dtype=str)).astype(str).str.casefold().eq("critical").sum())
+        escalated_count = int(rows.get("EscalationFlag", pd.Series(dtype=bool)).fillna(False).astype(bool).sum())
+        linked_critical_projects = int(
+            (
+                rows.get("DeliveryHealth", pd.Series("", index=rows.index)).astype(str).str.casefold().eq("red")
+                | rows.get("ProjectStatus", pd.Series("", index=rows.index)).astype(str).str.casefold().eq("on hold")
+            ).sum()
+        )
         ticket_label = "ticket" if len(rows) == 1 else "tickets"
+        title = "Critical project tickets" if critical_ticket_query else "Opportunity ticket status"
+        if critical_ticket_query:
+            summary = (
+                f"Found {len(rows):,} critical project {ticket_label}: {critical_priority:,} "
+                f"critical priority, {blocked_count:,} blocked, {escalated_count:,} escalated, "
+                f"and {linked_critical_projects:,} linked to red or on-hold projects."
+            )
+        else:
+            summary = f"Found {len(rows):,} matching {ticket_label}; {blocked_count:,} are blocked."
         return DataAnswer(
-            "Opportunity ticket status",
-            f"Found {len(rows):,} matching {ticket_label}; {blocked_count:,} are blocked.",
+            title,
+            summary,
             rows.sort_values("DueDate") if not rows.empty and "DueDate" in rows else rows,
             "Opportunity Tickets, Projects, and Opportunities sheets",
         )

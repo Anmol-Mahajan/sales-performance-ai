@@ -122,6 +122,21 @@ class QuestionAnsweringTests(unittest.TestCase):
         self.assertEqual(answer.title, "Ticket task status")
         self.assertTrue(answer.table["ProjectID"].eq("PRJ0001").all())
 
+    def test_critical_project_tickets_are_filtered(self) -> None:
+        answer = answer_data_question("Get me a list of critical project tickets", self.data)
+        self.assertEqual(answer.title, "Critical project tickets")
+        critical = (
+            answer.table["Priority"].eq("Critical")
+            | answer.table["TicketStatus"].eq("Blocked")
+            | answer.table["EscalationFlag"].fillna(False).astype(bool)
+            | answer.table["DeliveryHealth"].eq("Red")
+            | answer.table["ProjectStatus"].eq("On Hold")
+        )
+        self.assertFalse(answer.table.empty)
+        self.assertTrue(critical.all())
+        self.assertFalse(answer.table["TicketStatus"].eq("Resolved").any())
+        self.assertLess(len(answer.table), len(self.data["OpportunityTickets"]))
+
     def test_unknown_delivery_identifier_does_not_return_every_project(self) -> None:
         answer = answer_data_question("Show PRJ9999", self.data)
         self.assertEqual(answer.title, "Delivery identifier not found")

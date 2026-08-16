@@ -790,7 +790,11 @@ def _answer_delivery_question(
     status = rows.get("ProjectStatus", pd.Series("", index=rows.index)).astype(str).str.casefold()
     health = rows.get("DeliveryHealth", pd.Series("", index=rows.index)).astype(str).str.casefold()
     blocker = rows.get("Blocker", pd.Series("", index=rows.index)).fillna("").astype(str).str.strip()
-    if "blocked" in lowered:
+    critical_state = "critical" in lowered or re.search(r"\bred\b", lowered)
+    if critical_state:
+        critical = health.eq("red") | status.eq("on hold")
+        rows = rows[critical]
+    elif "blocked" in lowered:
         blocked = status.eq("on hold") | health.eq("red") | blocker.ne("")
         if asks_task:
             blocked = blocked | rows.get("BlockedTaskCount", pd.Series(0, index=rows.index)).gt(0)
@@ -846,11 +850,14 @@ def _answer_delivery_question(
         )
 
     active = int(rows["ProjectStatus"].astype(str).str.casefold().eq("active").sum())
+    on_hold = int(rows["ProjectStatus"].astype(str).str.casefold().eq("on hold").sum())
     red = int(rows["DeliveryHealth"].astype(str).str.casefold().eq("red").sum())
     open_tickets = int(pd.to_numeric(rows.get("OpenTicketCount"), errors="coerce").fillna(0).sum())
     blocked_tasks = int(pd.to_numeric(rows.get("BlockedTaskCount"), errors="coerce").fillna(0).sum())
     title = "Project delivery status"
-    if "blocked" in lowered:
+    if critical_state:
+        title = "Critical projects"
+    elif "blocked" in lowered:
         title = "Blocked projects"
     elif "on hold" in lowered:
         title = "Projects on hold"
@@ -873,10 +880,17 @@ def _answer_delivery_question(
         )
         title = f"{owner}'s most recent project"
     else:
-        summary = (
-            f"Found {len(rows):,} matching {project_label}: {active:,} active and {red:,} red. "
-            f"They have {open_tickets:,} open {ticket_label} and {blocked_tasks:,} blocked {task_label}."
-        )
+        if critical_state:
+            summary = (
+                f"Found {len(rows):,} critical {project_label} with red delivery health: "
+                f"{active:,} active and {on_hold:,} on hold. They have {open_tickets:,} "
+                f"open {ticket_label} and {blocked_tasks:,} blocked {task_label}."
+            )
+        else:
+            summary = (
+                f"Found {len(rows):,} matching {project_label}: {active:,} active and {red:,} red. "
+                f"They have {open_tickets:,} open {ticket_label} and {blocked_tasks:,} blocked {task_label}."
+            )
     exploratory = any(
         phrase in lowered
         for phrase in ["why", "recommend", "suggest", "what should", "how can", "help", "next action", "delay"]

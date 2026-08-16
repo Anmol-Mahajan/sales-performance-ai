@@ -106,6 +106,17 @@ class QuestionAnsweringTests(unittest.TestCase):
         )
         self.assertTrue(native_block.all())
 
+    def test_critical_project_question_filters_delivery_risk(self) -> None:
+        answer = answer_data_question("Which project are in critical state?", self.data)
+        self.assertEqual(answer.title, "Critical projects")
+        critical = (
+            answer.table["ProjectStatus"].eq("On Hold")
+            | answer.table["DeliveryHealth"].eq("Red")
+        )
+        self.assertFalse(answer.table.empty)
+        self.assertTrue(critical.all())
+        self.assertEqual(len(answer.table), 24)
+
     def test_task_question_returns_task_records(self) -> None:
         answer = answer_data_question("Show tasks for project PRJ0001", self.data)
         self.assertEqual(answer.title, "Ticket task status")

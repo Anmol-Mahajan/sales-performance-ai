@@ -226,6 +226,8 @@ models/best_pipeline_model.joblib
 
 ## Run The App
 
+For a short command-only reference, see `RUN_COMMANDS.md`.
+
 ```bash
 cd sales-performance-ai
 source .venv/bin/activate
